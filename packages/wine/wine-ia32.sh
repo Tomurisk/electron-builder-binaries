@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Harden curl by default
+alias curl='curl --fail --tlsv1.2 --proto "=https" --proto-redir "=https"'
+
 # CANNOT BE BUILD on latest macOS Mojave due to ia32 bugs (as Mojave removed corresponding capabilities)
 
 # custom homebrew prefix and DYLD_FALLBACK_LIBRARY_PATH doesn't work due to unknown reasons on Travis
@@ -21,7 +24,7 @@ mkdir usr/lib
 mkdir usr/bin
 mkdir usr/include
 
-export TARGET=$(PWD)
+export TARGET=$(pwd)
 export CPPFLAGS="-I$TARGET/usr/include"
 export CFLAGS="-O3 -arch i386 -m32 -I$TARGET/usr/include"
 export CXXFLAGS="$CFLAGS "
@@ -31,27 +34,83 @@ export PKG_CONFIG_PATH="$TARGET/usr/lib/pkgconfig"
 
 cd ..
 
+HASHES="
+ac1c3e11ca2371b84fa3b84c45215a5de2bef949156cd7b16732cb33913cd44d  libxml2-2.9.6.tar.xz
+566241ad815df935390b341a5d3d15a73a4000e5aab40c58505324c2855cbbb8  jpegsrc.v9b.tar.gz
+1a8ae5c8eafad895cc3fce78fbcb6fdef663b8eb8375f04616e6496360093abb  libpng-$LIBPNG_VERSION.tar.gz
+33a28fabac471891d0523033e99c0005b95e5618dc8ffa7fa47f9dadcacb1c9b  freetype-$FREETYPE_VERSION.tar.gz
+a811c664f870a3a01449443a93a6fcee41aea2e912e58f72742eb7924962be56  wine-$WINE_VERSION.tar.xz
+"
+
+verify_and_extract() {
+    url="$1"
+    file="$2"
+
+    expected_hash=$(echo "$HASHES" | awk -v file="$file" '$2 == file {print $1}')
+    if [ -z "$expected_hash" ]; then
+        echo "No expected hash for $file"
+        exit 1
+    fi
+
+    tmp=$(mktemp)
+
+    echo "Downloading $file..."
+    curl -L "$url" -o "$tmp"
+
+    echo "Verifying SHA256..."
+    actual_hash=$(sha256sum "$tmp" | awk '{print $1}')
+
+    if [ "$actual_hash" != "$expected_hash" ]; then
+        echo "SHA256 mismatch for $file"
+        echo "Expected: $expected_hash"
+        echo "Actual:   $actual_hash"
+        rm -f "$tmp"
+        exit 1
+    fi
+
+    echo "Extracting $file..."
+
+    case "$file" in
+        *.tar.gz|*.tgz) tar xzf "$tmp" ;;
+        *.tar.xz)       tar xJf "$tmp" ;;
+        *) echo "Unknown archive format: $file"; exit 1 ;;
+    esac
+
+    rm -f "$tmp"
+}
+
 # libxml required for wix
-curl -L http://xmlsoft.org/sources/libxml2-2.9.6.tar.gz | tar xz
+verify_and_extract \
+  "https://download.gnome.org/sources/libxml2/2.9/libxml2-2.9.6.tar.xz" \
+  "libxml2-2.9.6.tar.xz"
+
 cd libxml2-*
 ./configure --prefix=$TARGET/usr --without-python --without-lzma --disable-dependency-tracking
 make -j9
 make install
 cd ..
 
-curl -L http://ijg.org/files/jpegsrc.v9b.tar.gz | tar xz
+verify_and_extract \
+  "https://ijg.org/files/jpegsrc.v9b.tar.gz" \
+  "jpegsrc.v9b.tar.gz"
+
 cd jpeg-9b
 ./configure --prefix=$TARGET/usr
 make install
 cd ..
 
-curl -L http://downloads.sourceforge.net/project/libpng/libpng16/$LIBPNG_VERSION/libpng-$LIBPNG_VERSION.tar.gz | tar xz
-cd libpng-$LIBPNG_VERSION
+verify_and_extract \
+  "https://downloads.sourceforge.net/project/libpng/libpng16/older-releases/$LIBPNG_VERSION/libpng-$LIBPNG_VERSION.tar.gz" \
+  "libpng-$LIBPNG_VERSION.tar.gz"
+
 ./configure --prefix=$TARGET/usr
 make install
 cd ..
 
-curl -L http://download.savannah.gnu.org/releases/freetype/freetype-$FREETYPE_VERSION.tar.gz | tar xz
+verify_and_extract \
+  "https://download-mirror.savannah.gnu.org/releases/freetype/freetype-$FREETYPE_VERSION.tar.gz" \
+  "freetype-$FREETYPE_VERSION.tar.gz"
+
 cd freetype-$FREETYPE_VERSION
 ./configure --prefix=$TARGET/usr
 make -j9
@@ -59,7 +118,10 @@ make install
 cd ..
 
 #curl https://dl.winehq.org/wine/source/2.x/wine-$WINE_VERSION.tar.xz | tar xz
-curl https://dl.winehq.org/wine/source/2.0/wine-$WINE_VERSION.tar.xz | tar xz
+verify_and_extract \
+  "https://dl.winehq.org/wine/source/2.0/wine-$WINE_VERSION.tar.xz" \
+  "wine-$WINE_VERSION.tar.xz"
+
 cd wine-$WINE_VERSION
 ./configure --prefix=$TARGET/usr --disable-win64 --disable-win16 --without-x
 make -j9
