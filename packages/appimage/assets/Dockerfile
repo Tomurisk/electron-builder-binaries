@@ -16,15 +16,13 @@ RUN set -eux; \
     if [ "$TARGETARCH" = "arm64" ] || [ "$TARGETARCH" = "arm" ]; then \
         echo "🔧 Using ports.ubuntu.com for ARM"; \
         sed -i 's|http://archive.ubuntu.com/ubuntu|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list; \
+    elif [ "$TARGETARCH" = "386" ]; then \
+        echo "🔧 Using archive.ubuntu.com for i386"; \
+        sed -i 's|deb http://ports.ubuntu.com/ubuntu-ports|deb [arch=i386] http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list; \
     else \
-        echo "🔧 Using archive.ubuntu.com for x64"; \
+        echo "🔧 Using archive.ubuntu.com for x86_64"; \
         sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list; \
     fi; \
-    if [ "$TARGETARCH" = "386" ]; then \
-        echo "🔧 Using archive.ubuntu.com for i386" \
-        sed -i 's|deb http://archive.ubuntu.com/ubuntu|deb [arch=i386] http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list; \
-        sed -i 's|deb http://ports.ubuntu.com/ubuntu-ports|deb [arch=i386] http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list; \
-    fi;
     apt-get update || true && \
     apt-get install -y --no-install-recommends ubuntu-keyring gnupg ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -64,6 +62,8 @@ RUN rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
+    # Update for either of them
+    apt-get update; \
     case "$TARGETPLATFORM" in \
       "linux/386") \
         echo "📥 Downloading libappindicator1 from Ubuntu 18.04 archive (i386)..."; \
@@ -77,7 +77,6 @@ RUN set -eux; \
         ;; \
       *) \
         echo "📥 Installing libappindicator3-1 & libindicator3-7..."; \
-        apt-get update; \
         apt-get install -y --no-install-recommends \
           libappindicator3-1 \
           libindicator3-7; \
