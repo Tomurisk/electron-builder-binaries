@@ -7,4 +7,4 @@
 "ran": patch
 ---
 
-chore: embedding LICENSE/COPYING files within each toolset bundle
+chore: updating scripts w/ positional args, checksum matches, and general hardening
