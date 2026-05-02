@@ -389,6 +389,16 @@ EOF
 echo "  ✓ VERSION.txt updated"
 
 # =============================================================================
+# Download NSIS License
+# =============================================================================
+
+echo ""
+echo "📄 Downloading NSIS LICENSE..."
+curl -fsSL "https://raw.githubusercontent.com/kichik/nsis/master/COPYING" \
+  -o "$BUILD_DIR/nsis-bundle/LICENSE"
+echo "  ✓ LICENSE downloaded"
+
+# =============================================================================
 # Create Final Archive
 # =============================================================================
 
